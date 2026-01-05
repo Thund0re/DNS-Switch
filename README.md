@@ -1,5 +1,5 @@
 
-# Windows DNS Changer (GUI)
+# DNS Changer (GUI)
 
 A lightweight and transparent Windows DNS Changer built using Python and Tkinter.
 The application allows users to change, test, undo, and reset DNS settings with full visibility into what actions are being performed.
