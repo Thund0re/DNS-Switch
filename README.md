@@ -1,108 +1,217 @@
-# DNS-Switcher
-App to switch your local DNS to Cloudflar, Google etc..
 
+# Windows DNS Changer (GUI)
 
-***
+A lightweight and transparent Windows DNS Changer built using Python and Tkinter.
+The application allows users to change, test, undo, and reset DNS settings with full visibility into what actions are being performed.
 
-## Fastest DNS Changer
+The tool is designed to be fast, safe, and user-controlled.
+No background services, no silent changes, and no startup delays.
 
-### Overview
+---
 
-**Fastest DNS Changer** is a cross-platform, desktop-based application that allows you to quickly switch your system’s DNS servers between popular providers. It provides a user-friendly interface for Windows, macOS, and Linux, and is especially useful for developers, network administrators, and privacy-conscious users who want to experiment with different DNS services.
+## Features
 
-***
+* Change DNS using well-known public DNS providers
+* Test and identify the fastest DNS (latency + real DNS resolution)
+* User confirmation before applying any DNS changes
+* Undo and restore previous DNS settings (session-based)
+* Reset DNS to automatic (DHCP)
+* Live activity log showing commands and results
+* Clear state indicator showing current operation
+* Clean exit with no background processes
 
-### Features
+---
 
-- **Detects current DNS** settings (primary and secondary) and displays them in real time.
-- **Sets DNS** to popular providers via one-click: Cloudflare, Google, Quad9, OpenDNS, AdGuard.
-- **Resets DNS** to your original (ISP) settings.
-- **Supports Windows, macOS, and Linux** (with platform-specific system commands).
-- **Modern, themed UI** using ttkbootstrap for a visually appealing and responsive interface.
-- **Logging** of all actions and results directly in the app window.
-- **Permission reminders** for admin/root access when required.
+## Supported Platform
 
-***
+* Windows 10
+* Windows 11
+* Python 3.9 or newer
+* Administrator privileges required for DNS changes
 
-### Supported DNS Providers
+---
 
-| Provider   | Primary DNS      | Secondary DNS    |
-|------------|------------------|------------------|
-| Cloudflare | 1.1.1.1          | 1.0.0.1          |
-| Google     | 8.8.8.8          | 8.8.4.4          |
-| Quad9      | 9.9.9.9          | 149.112.112.112  |
-| OpenDNS    | 208.67.222.222   | 208.67.220.220   |
-| AdGuard    | 94.140.14.14     | 94.140.15.15     |
+## Dependencies
 
-***
+Only standard Python libraries are used:
 
-### System Requirements
+* tkinter
+* subprocess
+* threading
+* re
+* time
 
-- **Python 3.6+**
-- **tkinter** (usually included with Python)
-- **ttkbootstrap** (`pip install ttkbootstrap`)
+No third-party packages are required.
 
-***
+---
 
-### Installation
+## How to Run
 
-1. **Clone or download** the repository.
-2. **Install dependencies**:
-   ```bash
-   pip install ttkbootstrap
-   ```
-3. **Run the application**:
-   ```bash
-   python dns_changer_app.py
-   ```
-   - **On Windows:** The app will attempt to relaunch itself with administrative privileges if not already running as admin.
-   - **On macOS/Linux:** You must run the script as root:  
-     ```bash
-     sudo python3 dns_changer_app.py
-     ```
+### Step 1: Download the Application
 
-***
+Clone the repository or download the Python file directly.
 
-### Usage Instructions
+```bash
+git clone https://github.com/your-repo/windows-dns-changer.git
+cd windows-dns-changer
+```
 
-1. **Launch the app.** You’ll see your current DNS servers displayed.
-2. **Click a provider button** (e.g., “Set Cloudflare”) to change your DNS instantly.
-3. **To reset** to your original (ISP) DNS, click “Reset to Default ISP DNS”.
-4. **All actions are logged** in the text area at the bottom of the window.
-5. **Exit** the app using the “Exit” button.
+---
 
-***
+### Step 2: Run as Administrator
 
-### Permissions & Security
+Changing DNS settings requires administrator privileges.
 
-- **Changing DNS requires administrator (Windows) or root (macOS/Linux) privileges.** The app will prompt you if you don’t have the required permissions.
-- **On Linux:** The app assumes your primary network interface is named `eth0`. If yours is different (e.g., `wlan0` or `enp0s3`), you’ll need to modify the script accordingly.
-- **No internet connection is required to change DNS** (the app only modifies local network settings).
-- **The app does not collect, store, or transmit any user data.**
+Option A: From an elevated command prompt
 
-***
+```bash
+python dns_changer.py
+```
 
-### Limitations
+Option B: From File Explorer
 
-- **Linux interface names:** The script currently hard-codes `eth0` for Linux. Adjust if your system uses a different interface name.
-- **No DHCP support:** The app sets static DNS. If your network uses DHCP (automatic DNS assignment), the changes may be overwritten when your connection renews.
-- **UI only:** There is no command-line interface or automation API.
-- **Manual reset:** If you close the app before resetting, your original DNS may not be restored automatically.
+* Right-click the Python file
+* Select "Run as administrator"
 
-***
+---
 
-### Troubleshooting
+## How to Use
 
-- **“Failed to change DNS”** usually means you did not run the app as administrator/root.
-- **“Cannot Reset”** appears if the app couldn’t record your original DNS settings. In this case, reset your DNS manually.
-- **Logs are your friend:** Check the log area for detailed error messages.
+### Select a DNS Provider
 
-***
+Choose a DNS provider from the dropdown list.
+Examples include Cloudflare, Google DNS, Quad9, and others.
 
-### Customization
+---
 
-- **UI Theme:** The app uses ttkbootstrap’s “darkly” theme by default. You can change this by modifying the `themename` parameter in the `DNSApp` class.
-- **Adding Providers:** Edit the `dns_providers` dictionary in the `DNSApp` class to add or remove DNS services.
+### Apply Selected DNS
 
-***
+Click "Apply Selected DNS" to apply the chosen DNS to the currently active network interface.
+The activity log will show which commands are executed and whether the operation succeeded.
+
+---
+
+### Find Fastest DNS (No Apply)
+
+Click "Find Fastest DNS (No Apply)" to test DNS speed.
+
+The application will:
+
+* Ping each DNS server
+* Perform a real DNS lookup using nslookup
+* Rank DNS providers by performance
+
+A popup will display the results and ask whether you want to select the fastest DNS.
+DNS is not applied automatically.
+
+---
+
+### Undo / Restore Previous DNS
+
+Restores the DNS configuration that was active before the last DNS change.
+
+This works for:
+
+* Static DNS configurations
+* Automatic (DHCP) DNS
+
+Undo is valid only during the current application session.
+
+---
+
+### Reset to Automatic (DHCP)
+
+Resets DNS settings back to the system default configuration using DHCP.
+
+---
+
+### Exit Application
+
+Closes the application cleanly.
+No background processes remain running.
+
+---
+
+## Activity Log
+
+The activity log displays real-time information about what the application is doing.
+
+It includes:
+
+* Timestamps
+* Current tasks
+* DNS test progress
+* Command execution results
+* Errors if they occur
+
+Example log output:
+
+```
+[14:22:01] Detecting active network interface
+[14:22:02] Active interface: Wi-Fi
+[14:22:10] Testing Cloudflare (1.1.1.1)
+[14:22:11] Result: Ping 18 ms, Resolve 22 ms
+```
+
+---
+
+## Application States
+
+The current state is displayed at the top of the application.
+
+Possible states:
+
+* IDLE: Waiting for user action
+* TESTING DNS: DNS speed test in progress
+* APPLYING DNS: DNS change in progress
+* RESETTING DNS: Resetting DNS to DHCP
+* DONE: Operation completed successfully
+* ERROR: Operation failed
+
+---
+
+## Important Notes
+
+* Administrator privileges are mandatory for applying or resetting DNS
+* DNS speed testing does not modify system settings
+* Undo works only while the application remains open
+* DNS performance depends on network conditions and ISP routing
+
+---
+
+## Troubleshooting
+
+### Permission Error
+
+Ensure the application is started with administrator privileges.
+
+---
+
+### No DNS Servers Responded
+
+Check internet connectivity or firewall rules blocking ICMP or DNS queries.
+
+---
+
+### Undo Not Available
+
+No DNS changes were made during the current session.
+
+---
+
+## Internal Design Overview
+
+* Uses netsh for DNS configuration
+* Uses ping for network latency testing
+* Uses nslookup for real DNS resolution timing
+* Background threads prevent UI blocking
+* UI updates are performed safely on the main thread
+
+---
+
+## License
+
+MIT License
+
+You are free to use, modify, and distribute this software.
 
