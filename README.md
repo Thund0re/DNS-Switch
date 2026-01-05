@@ -1,4 +1,3 @@
-
 # DNS Changer (GUI)
 
 A lightweight and transparent Windows DNS Changer built using Python and Tkinter.
