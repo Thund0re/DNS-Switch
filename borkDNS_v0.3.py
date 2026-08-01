@@ -1,5 +1,13 @@
 """
 borkDNS  v0.3  — Network Utility Suite
+────────────────────────────────────────────────────────────────────────────────
+What's new vs v0.2
+  • Per-task progress in the log — speed-test streams each result as it arrives
+    (not batch at end); apply/flush/undo each log every step they take
+  • DPI-aware auto-scaling — SC multiplier derived from screen DPI at startup;
+    all fonts, padding, and window sizes scale with it automatically
+────────────────────────────────────────────────────────────────────────────────
+stdlib only (tkinter + subprocess + socket + asyncio)
 """
 from __future__ import annotations
 import asyncio, json, os, re, socket, subprocess, sys, threading, time, ctypes
@@ -300,36 +308,136 @@ def pulse(on: bool):
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def get_active_interface() -> Optional[str]:
+    """Detects the currently connected network adapter (Ethernet or Wi-Fi) robustly."""
     try:
-        out = await arun("netsh interface show interface", 4)
+        # Query PowerShell for the name of the active interface that is 'Up'
+        proc = await asyncio.create_subprocess_exec(
+            "powershell", "-NoProfile", "-Command",
+            "Get-NetAdapter | Where-Object {$_.Status -eq 'Up'} | Select-Object -First 1 -ExpandProperty Name",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        stdout, _ = await proc.communicate()
+        iface = stdout.decode().strip()
+        if iface:
+            return iface
+    except Exception:
+        pass
+
+    # Fallback to safer regex-based netsh parser if powershell fails
+    try:
+        proc = await asyncio.create_subprocess_shell(
+            "netsh interface show interface",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        stdout, _ = await proc.communicate()
+        out = stdout.decode(errors='ignore')
         for line in out.splitlines():
-            if "Connected" in line and ("Ethernet" in line or "Wi-Fi" in line):
-                return line.split()[-1]
+            if "Connected" in line:
+                # Matches the interface name at the end of the line, keeping spaces intact
+                match = re.search(r'Connected\s+\w+\s+(.+)$', line)
+                if match:
+                    return match.group(1).strip()
     except Exception:
         pass
     return None
 
-async def get_current_dns(iface: str) -> tuple[str, list[str]]:
-    try:
-        out = await arun(f'netsh interface ip show dns name="{iface}"')
-        if "DHCP enabled" in out:
-            return "dhcp", []
-        return "static", re.findall(r"\d+\.\d+\.\d+\.\d+", out)
-    except Exception:
-        return "unknown", []
 
-async def apply_dns(primary: str, secondary: str) -> bool:
+async def get_current_dns(iface: str) -> tuple[str, list[str]]:
+    """Retrieves current DNS addresses and state for the active interface."""
+    if not iface:
+        return "dhcp", []
     try:
-        await arun(f'netsh interface ip set dns name="{S.active_interface}" static {primary}')
-        await arun(f'netsh interface ip add dns name="{S.active_interface}" addr={secondary} index=2')
-        return True
+        cmd = f"Get-DnsClientServerAddress -InterfaceAlias '{iface}' -AddressFamily IPv4 | Select-Object -ExpandProperty ServerAddresses"
+        proc = await asyncio.create_subprocess_exec(
+            "powershell", "-NoProfile", "-Command", cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        stdout, _ = await proc.communicate()
+        lines = stdout.decode().splitlines()
+        dns_list = [line.strip() for line in lines if re.match(r'^\d{1,3}(\.\d{1,3}){3}$', line.strip())]
+
+        # Check if DHCP is enabled for DNS
+        proc2 = await asyncio.create_subprocess_shell(
+            f'netsh interface ip show dns name="{iface}"',
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        stdout2, _ = await proc2.communicate()
+        dhcp_check = stdout2.decode(errors='ignore')
+        if "DHCP enabled: Yes" in dhcp_check or "DHCP enabled" in dhcp_check:
+            return "dhcp", dns_list
+        return "static", dns_list
+    except Exception:
+        return "dhcp", []
+
+
+async def apply_dns(interface: str, primary: str, secondary: str) -> bool:
+    """Applies primary and secondary DNS servers to the specified interface."""
+    if not interface:
+        return False
+    try:
+        # Use Set-DnsClientServerAddress to cleanly apply DNS (supports spaces in names)
+        cmd = f"Set-DnsClientServerAddress -InterfaceAlias '{interface}' -ServerAddresses ('{primary}', '{secondary}')"
+        proc = await asyncio.create_subprocess_exec(
+            "powershell", "-NoProfile", "-Command", cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        await proc.communicate()
+        if proc.returncode == 0:
+            return True
+    except Exception:
+        pass
+
+    # Fallback to traditional netsh commands if PowerShell cmdlet is blocked
+    try:
+        proc1 = await asyncio.create_subprocess_shell(
+            f'netsh interface ip set dns name="{interface}" static {primary}',
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        await proc1.communicate()
+
+        proc2 = await asyncio.create_subprocess_shell(
+            f'netsh interface ip add dns name="{interface}" addr={secondary} index=2',
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        await proc2.communicate()
+        return proc1.returncode == 0 and proc2.returncode == 0
     except Exception:
         return False
 
-async def reset_to_dhcp() -> bool:
+
+async def reset_to_dhcp(interface: str) -> bool:
+    """Resets the DNS settings to automatic (DHCP)."""
+    if not interface:
+        return False
     try:
-        await arun(f'netsh interface ip set dns name="{S.active_interface}" source=dhcp')
-        return True
+        cmd = f"Set-DnsClientServerAddress -InterfaceAlias '{interface}' -ResetServerAddresses"
+        proc = await asyncio.create_subprocess_exec(
+            "powershell", "-NoProfile", "-Command", cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        await proc.communicate()
+        if proc.returncode == 0:
+            return True
+    except Exception:
+        pass
+
+    # Fallback to netsh
+    try:
+        proc = await asyncio.create_subprocess_shell(
+            f'netsh interface ip set dns name="{interface}" source=dhcp',
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        await proc.communicate()
+        return proc.returncode == 0
     except Exception:
         return False
 
@@ -488,7 +596,7 @@ async def _do_apply(primary: str, secondary: str, name: str = "Custom"):
     set_status("Setting primary DNS…", T["accent"])
     log(f"  [3/3] Setting secondary → {secondary}", "info")
     set_status("Setting secondary DNS…", T["accent"])
-    ok = await apply_dns(primary, secondary)
+    ok = await apply_dns(S.active_interface, primary, secondary)
     pulse(False)
     if ok:
         S.current_dns_mode = "static"
@@ -518,7 +626,7 @@ async def _do_reset():
     log(f"  [1/2] Saved: {S.previous_mode}  {S.previous_dns}", "info")
     log("  [2/2] Sending netsh DHCP command…", "info")
     set_status("Resetting to DHCP…", T["accent"])
-    ok = await reset_to_dhcp()
+    ok = await reset_to_dhcp(S.active_interface)
     pulse(False)
     if ok:
         S.current_dns_mode = "dhcp"
@@ -543,14 +651,14 @@ async def _do_undo():
     log("  [2/2] Applying restore command…", "info")
     set_status("Restoring…", T["accent"])
     if S.previous_mode == "dhcp":
-        ok = await reset_to_dhcp()
+        ok = await reset_to_dhcp(S.active_interface)
         if ok:
             S.current_dns_mode = "dhcp"; S.current_dns_list = []
             _update_current_dns_banner("dhcp", [])
     else:
         p = S.previous_dns[0]
         s = S.previous_dns[1] if len(S.previous_dns) > 1 else p
-        ok = await apply_dns(p, s)
+        ok = await apply_dns(S.active_interface, p, s)
         if ok:
             S.current_dns_mode = "static"; S.current_dns_list = [p, s]
             _update_current_dns_banner("static", [p, s])
