@@ -1,11 +1,9 @@
 """
-borkDNS  v0.3  — Network Utility Suite
+borkDNS  v0.3 [Network Utility Suite]
 ────────────────────────────────────────────────────────────────────────────────
 What's new vs v0.2
-  • Per-task progress in the log — speed-test streams each result as it arrives
-    (not batch at end); apply/flush/undo each log every step they take
-  • DPI-aware auto-scaling — SC multiplier derived from screen DPI at startup;
-    all fonts, padding, and window sizes scale with it automatically
+  • Per-task progress in the log
+  • DPI-aware auto-scaling
 ────────────────────────────────────────────────────────────────────────────────
 stdlib only (tkinter + subprocess + socket + asyncio)
 """
